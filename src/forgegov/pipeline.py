@@ -288,7 +288,7 @@ def _stage_certify(pipeline_result: PipelineResult) -> StageResult:
 
         # Package inventory
         if pipeline_result.scan_result:
-            inv = doc.add_section("Package Inventory")
+            doc.add_section("Package Inventory")
             headers = ["Package", "Version", "Calibration", "Contract"]
             rows = []
             for pkg in pipeline_result.scan_result.packages:
@@ -303,7 +303,7 @@ def _stage_certify(pipeline_result: PipelineResult) -> StageResult:
                     if pkg_errors:
                         contract_ok = f"{len(pkg_errors)} errors"
                 rows.append([pkg.name, pkg.version, cal, contract_ok])
-            inv.add_table(headers, rows)
+            doc.add_table(headers, rows)
 
         cert_bytes = render(doc, format="pdf")
 
