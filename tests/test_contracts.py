@@ -64,6 +64,55 @@ class TestBannedImports:
         violations = _check_banned_imports(tree, "testpkg", "bad.py")
         assert len(violations) == 3
 
+    def test_detects_subprocess(self):
+        code = "import subprocess"
+        tree = ast.parse(code)
+        violations = _check_banned_imports(tree, "testpkg", "bad.py")
+        assert len(violations) == 1
+        assert "command execution" in violations[0].message
+
+    def test_detects_requests(self):
+        code = "import requests"
+        tree = ast.parse(code)
+        violations = _check_banned_imports(tree, "testpkg", "bad.py")
+        assert len(violations) == 1
+        assert "network" in violations[0].message
+
+    def test_detects_httpx(self):
+        code = "from httpx import Client"
+        tree = ast.parse(code)
+        violations = _check_banned_imports(tree, "testpkg", "bad.py")
+        assert len(violations) == 1
+
+    def test_detects_boto3(self):
+        code = "import boto3"
+        tree = ast.parse(code)
+        violations = _check_banned_imports(tree, "testpkg", "bad.py")
+        assert len(violations) == 1
+        assert "cloud" in violations[0].message
+
+
+class TestDangerousCalls:
+    def test_detects_os_system(self):
+        code = "import os\nos.system('ls')"
+        tree = ast.parse(code)
+        violations = _check_file_io(tree, "testpkg", "core", "core.py")
+        assert any(v.rule == "NO_EXEC" for v in violations)
+
+    def test_detects_os_popen(self):
+        code = "import os\nos.popen('cmd')"
+        tree = ast.parse(code)
+        violations = _check_file_io(tree, "testpkg", "core", "core.py")
+        assert any(v.rule == "NO_EXEC" for v in violations)
+
+    def test_allows_os_path(self):
+        """os.path operations are fine — no execution risk."""
+        code = "import os\nresult = os.path.join('a', 'b')"
+        tree = ast.parse(code)
+        violations = _check_file_io(tree, "testpkg", "core", "core.py")
+        exec_violations = [v for v in violations if v.rule == "NO_EXEC"]
+        assert len(exec_violations) == 0
+
 
 class TestFileIO:
     def test_detects_open_call(self):

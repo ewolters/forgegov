@@ -34,6 +34,14 @@ BANNED_IMPORTS = {
     "openai": "LLM SDK",
     "celery": "task queue",
     "redis": "external service",
+    "subprocess": "command execution",
+    "requests": "network I/O",
+    "httpx": "network I/O",
+    "urllib.request": "network I/O",
+    "aiohttp": "network I/O",
+    "boto3": "cloud service",
+    "paramiko": "SSH",
+    "smtplib": "email",
 }
 
 # Modules where file I/O is acceptable (calibration data, drift history).
@@ -51,6 +59,10 @@ IO_FUNCTIONS = {"open", "Path.read_text", "Path.write_text", "Path.read_bytes",
 
 IO_ATTR_NAMES = {"read_text", "write_text", "read_bytes", "write_bytes",
                  "mkdir", "unlink", "rmdir"}
+
+# os module calls that allow command execution or environment leakage
+DANGEROUS_OS_CALLS = {"system", "popen", "exec", "execl", "execle", "execlp",
+                      "execv", "execve", "execvp", "spawn", "spawnl", "spawnle"}
 
 
 @dataclass
@@ -154,6 +166,18 @@ def _check_file_io(
                     line=node.lineno,
                     rule="NO_IO",
                     message=f"File I/O (.{node.func.attr}) not allowed in this module",
+                ))
+            # os.system(), os.popen(), etc.
+            elif (isinstance(node.func, ast.Attribute)
+                  and node.func.attr in DANGEROUS_OS_CALLS
+                  and isinstance(node.func.value, ast.Name)
+                  and node.func.value.id == "os"):
+                violations.append(ContractViolation(
+                    package=pkg_name,
+                    file=filepath,
+                    line=node.lineno,
+                    rule="NO_EXEC",
+                    message=f"Command execution (os.{node.func.attr}) not allowed",
                 ))
     return violations
 
