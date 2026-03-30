@@ -107,6 +107,62 @@ class TestPipelineRun:
         assert isinstance(result.stages[0].passed, bool)
 
 
+class TestReport:
+    def test_to_dict_structure(self):
+        result = run(stages=["contract"])
+        d = result.to_dict()
+        assert "forgegov_version" in d
+        assert "timestamp" in d
+        assert "passed" in d
+        assert "stages" in d
+        assert "packages" in d
+        assert "contract_errors" in d
+        assert "contract_warnings" in d
+        assert isinstance(d["passed"], bool)
+        assert isinstance(d["packages"], dict)
+
+    def test_to_dict_stage_detail(self):
+        result = run(stages=["contract"])
+        d = result.to_dict()
+        assert len(d["stages"]) == 1
+        stage = d["stages"][0]
+        assert stage["stage"] == "contract"
+        assert "passed" in stage
+        assert "errors" in stage
+
+    def test_to_dict_packages_populated(self):
+        result = run(stages=["contract"])
+        d = result.to_dict()
+        if d["packages"]:
+            pkg = next(iter(d["packages"].values()))
+            assert "version" in pkg
+            assert "has_calibration" in pkg
+            assert "modules" in pkg
+
+    def test_write_report(self, tmp_path):
+        result = run(stages=["contract"])
+        report_path = result.write_report(tmp_path)
+        assert report_path.exists()
+        assert report_path.name == "forgegov_latest.json"
+
+        import json
+        data = json.loads(report_path.read_text())
+        assert data["passed"] == result.passed
+
+        # Should also write timestamped copy
+        history_files = [f for f in tmp_path.iterdir() if f.name.startswith("forgegov_2")]
+        assert len(history_files) == 1
+
+    def test_write_report_is_valid_json(self, tmp_path):
+        result = run(stages=["integration"])
+        report_path = result.write_report(tmp_path)
+
+        import json
+        data = json.loads(report_path.read_text())
+        # Should be consumable by SVEND: just check it parses and has the key field
+        assert isinstance(data.get("passed"), bool)
+
+
 class TestStages:
     def test_all_stages_defined(self):
         expected = {"lint", "test", "contract", "calibrate", "integration", "certify"}

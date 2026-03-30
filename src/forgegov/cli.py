@@ -15,6 +15,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     result = pipeline.run(packages=packages, stages=stages)
     print(result.summary())
+
+    # Write machine-readable report for SVEND compliance integration
+    report_path = result.write_report()
+    print(f"\nReport: {report_path}")
+
     return 0 if result.passed else 1
 
 
@@ -124,6 +129,35 @@ def cmd_compat(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """Read the latest pipeline report (JSON to stdout)."""
+    import json
+    from pathlib import Path
+
+    report_path = Path.home() / ".forge" / "reports" / "forgegov_latest.json"
+    if not report_path.exists():
+        print("No report found. Run 'forgegov run' first.")
+        return 1
+
+    report = json.loads(report_path.read_text())
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        passed = report.get("passed", False)
+        ts = report.get("timestamp", "unknown")
+        print(f"Last run: {ts}")
+        print(f"Status: {'PASSED' if passed else 'FAILED'}")
+        print(f"Packages: {len(report.get('packages', {}))}")
+        print(f"Contracts: {report.get('contract_errors', '?')} errors, "
+              f"{report.get('contract_warnings', '?')} warnings")
+        for stage in report.get("stages", []):
+            icon = "PASS" if stage["passed"] else "FAIL"
+            print(f"  [{icon}] {stage['stage']} — {stage['detail']}")
+
+    return 0 if report.get("passed", False) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="forgegov",
@@ -146,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     # forgegov compat
     sub.add_parser("compat", help="Show compatibility matrix")
 
+    # forgegov report
+    p_report = sub.add_parser("report", help="Read latest pipeline report")
+    p_report.add_argument("--json", action="store_true", help="Output raw JSON (for SVEND)")
+
     args = parser.parse_args(argv)
 
     if args.command == "run":
@@ -156,6 +194,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_status(args)
     elif args.command == "compat":
         return cmd_compat(args)
+    elif args.command == "report":
+        return cmd_report(args)
     else:
         parser.print_help()
         return 0

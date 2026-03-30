@@ -11,11 +11,13 @@ Stages:
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .contracts import ContractResult, check
@@ -60,6 +62,59 @@ class PipelineResult:
         status = "PASSED" if self.passed else "FAILED"
         lines.insert(0, f"Pipeline {status} ({self.total_duration_s:.1f}s)")
         return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        """Machine-readable report for consumption by SVEND compliance."""
+        return {
+            "forgegov_version": "0.1.0",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "passed": self.passed,
+            "total_duration_s": round(self.total_duration_s, 2),
+            "stages": [
+                {
+                    "stage": s.stage,
+                    "passed": s.passed,
+                    "duration_s": round(s.duration_s, 2),
+                    "detail": s.detail,
+                    "errors": s.errors,
+                }
+                for s in self.stages
+            ],
+            "packages": {
+                p.name: {
+                    "version": p.version,
+                    "has_calibration": p.has_calibration,
+                    "has_py_typed": p.has_py_typed,
+                    "has_all_export": p.has_all_export,
+                    "modules": p.modules,
+                }
+                for p in (self.scan_result.packages if self.scan_result else [])
+            },
+            "contract_errors": len(self.contract_result.errors) if self.contract_result else 0,
+            "contract_warnings": len(self.contract_result.warnings) if self.contract_result else 0,
+        }
+
+    def write_report(self, path: Path | None = None) -> Path:
+        """Write JSON report to disk. SVEND reads this file.
+
+        Default location: ~/.forge/reports/forgegov_latest.json
+        Also writes a timestamped copy for history.
+        """
+        report_dir = path or (Path.home() / ".forge" / "reports")
+        report_dir.mkdir(parents=True, exist_ok=True)
+
+        report = self.to_dict()
+
+        # Always overwrite latest — this is what SVEND's compliance check reads
+        latest = report_dir / "forgegov_latest.json"
+        latest.write_text(json.dumps(report, indent=2))
+
+        # Timestamped copy for audit trail
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        history = report_dir / f"forgegov_{ts}.json"
+        history.write_text(json.dumps(report, indent=2))
+
+        return latest
 
 
 def _find_package_root(pkg: PackageInfo) -> Path | None:
