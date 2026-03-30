@@ -16,6 +16,7 @@ KNOWN_PACKAGES = [
     "forgedoc",
     "forgedoe",
     "forgeml",
+    "forgepad",
     "forgepbs",
     "forgespc",
     "forgestat",
