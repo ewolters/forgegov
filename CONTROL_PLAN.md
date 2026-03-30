@@ -1,142 +1,194 @@
-# ForgeGov Quality Control Plan
+# Quality Control Plan — SVEND + Forge Ecosystem
 
 **Date:** 2026-03-29
-**Standard:** OLR-001 (Organizational Learning Rate) — applied to the Forge ecosystem itself
-**Scope:** The forge computation packages + forgegov + SVEND compliance bridge
+**Scope:** Full product quality — SVEND platform + forge computation layer
+**Standard reference:** OLR-001 (the product standard SVEND implements for customers)
 
 ---
 
-## Context
+## Two Quality Surfaces
 
-Object 271 establishes that SVEND is a process knowledge system built on three concerns: Process Knowledge (the graph), Learning System (the Loop), and Compliance. The forge ecosystem IS the computation layer that produces calibrated evidence for the graph.
+### Surface 1: Does the computation produce correct results?
 
-This control plan applies OLR-001's own principles to the forge ecosystem. We eat our own cooking — every forge package is a measurement instrument that requires calibration, verification, and knowledge maintenance.
+The forge packages are measurement instruments. If forgespc computes wrong control limits, every customer's SPC chart is wrong. If forgedoe generates an unbalanced design matrix, every customer's DOE is invalid.
 
----
+**Owner:** forgegov (pipeline + audits + calibration)
+**Detection:** Automated — golden references, contracts, lint, tests
 
-## Knowledge Structure
+### Surface 2: Does SVEND correctly implement OLR-001 for customers?
 
-The forge ecosystem's "process" is: **code goes in, correct computation comes out**. The knowledge we maintain is: which computations are correct, proven, and current.
+The product promises a process knowledge system with three concerns (Graph, Loop, Compliance). If the graph doesn't accumulate knowledge from investigations, if signals don't route to the Loop, if the FMIS view doesn't derive from the graph — the product is broken even if every individual computation is correct.
 
-### Nodes (What We Know About)
-
-| Node | Type | Classification |
-|------|------|---------------|
-| Each exported function in each forge package | Process parameter | Per function — critical if used in calibration, major otherwise |
-| Each golden reference case in forgecal | Specification | Critical — these ARE the truth |
-| Each contract rule in forgegov | Control method | Major |
-| Each test in each package | Detection mechanism | Major |
-| The SVEND bridge check | Integration point | Critical |
-
-### Edges (What We Claim)
-
-| Edge | Evidence Source | Current State |
-|------|---------------|---------------|
-| "forgespc.xbar_r_chart produces correct control limits" | Golden case CAL-SPC-* | Calibrated (14/14) |
-| "forgedoe.full_factorial produces correct design matrices" | Golden case CAL-DOE-* | Calibrated (6/6) |
-| "forgesiop.economic_order_quantity matches Wilson formula" | Golden case CAL-SIOP-* | Calibrated (10/10) |
-| "No forge package imports Django" | AST scan (forgegov contracts) | Verified continuously |
-| "No forge package executes commands" | AST scan (forgegov contracts) | Verified continuously |
-| "All forge packages pass their test suites" | pytest (forgegov pipeline) | Verified continuously |
-| "All forge packages are lint clean" | ruff (forgegov pipeline) | Verified continuously |
-| "SVEND reads forgegov report correctly" | Bridge check | Verified continuously |
+**Owner:** SVEND compliance + quality manager review
+**Detection:** Mixed — some automated (compliance checks), some requires judgment
 
 ---
 
-## Control Plan — Detection Mechanisms
+## Surface 1: Computation Correctness
 
-| What | Detection Level | Method | Frequency | Reaction |
-|------|----------------|--------|-----------|----------|
-| **Statistical correctness** | L3 (auto detect + segregate) | forgecal golden references via `forgegov run --stage calibrate` | Every pipeline run | Failing case blocks pipeline, report shows FAIL |
-| **Framework leakage** | L1 (source prevention) | AST scan bans Django/Flask/subprocess/etc. — cannot import | Every pipeline run | Contract violation = error |
-| **Command execution** | L1 (source prevention) | AST scan bans subprocess, os.system/exec | Every pipeline run | Contract violation = error |
-| **Network I/O** | L1 (source prevention) | AST scan bans requests/httpx/boto3 | Every pipeline run | Contract violation = error |
-| **Unauthorized file I/O** | L3 (auto detect) | AST scan flags open()/Path.read/write outside designated modules | Every pipeline run | Contract violation = error |
-| **Test regression** | L4 (auto alert + human) | pytest across all packages | Every pipeline run | Failure blocks pipeline |
-| **Lint violations** | L4 (auto alert + human) | ruff across all packages | Every pipeline run | Failure blocks pipeline |
-| **Stubs in production code** | L5 (structured inspection) | `forgegov audit --audit stubs` | On review | Finding reported, human investigates |
-| **TODO/FIXME markers** | L5 (structured inspection) | `forgegov audit --audit markers` | On review | Finding reported, human prioritizes |
-| **Untested exports** | L5 (structured inspection) | `forgegov audit --audit untested_exports` | On review | Finding reported, human adds tests |
-| **Weak tests** | L5 (structured inspection) | `forgegov audit --audit test_quality` | On review | Finding reported, human strengthens |
-| **Wrong math** | L6 (unstructured observation) | Quality manager reads code | On "done" claims | Fix or flag to developer |
-| **Incomplete implementations** | L6 (unstructured observation) | Quality manager reads code | On "done" claims | Fix or flag to developer |
-| **Cross-session conflicts** | L4 (auto + human) | Regression audit + pipeline diff | After parallel sessions | Quality manager investigates |
+### Control Points
 
-### Detection Level Summary
+| Forge Package | OLR-001 Role | Golden Cases | Detection Level |
+|--------------|-------------|-------------|-----------------|
+| forgespc | SPC monitoring → flags edge staleness (§7.4, §13) | 14 | L3 (auto) |
+| forgedoe | DOE calibration → EdgeEvidence with effect sizes (§8) | 6 | L3 (auto) |
+| forgestat | Statistical tests → calibrate graph edges (§8) | In progress | L4 (building) |
+| forgecal | Validates all computation instruments (§24 equivalent) | N/A — is the validator | L3 (auto) |
+| forgeviz | Renders graph health, detection ladders, maturity (§9, §13) | 0 — rendering | L4 (tests) |
+| forgesia | Bayesian posteriors on graph edges (Annex B) | Not extracted yet | L6 (unstructured) |
+| forgesiop | Supply chain + yield from Cpk (§22) | 10 | L3 (auto) |
+| forgedoc | Compliance artifacts from graph data (§17, §23) | 0 — rendering | L4 (tests) |
 
-| Level | Count | Characteristics |
-|-------|-------|----------------|
-| L1 (source prevention) | 3 | Framework leaks, command exec, network — **cannot happen** |
-| L3 (auto detect + segregate) | 2 | Calibration failures, unauthorized I/O |
-| L4 (auto alert + human) | 3 | Test regression, lint, cross-session |
-| L5 (structured inspection) | 4 | Stubs, markers, untested exports, weak tests |
-| L6 (unstructured observation) | 2 | Wrong math, incomplete implementations |
+### Automated Pipeline
 
-**Investment direction:** Move L6 items up. Wrong math detection → L3 via more golden reference cases in forgecal. Incomplete implementation detection → L5 via more audit checks.
+```bash
+forgegov run          # lint → test → contract → calibrate → integration → certify
+forgegov audit        # stubs → markers → untested exports → weak tests
+```
+
+### Investment Priority
+
+Move forgesia from L6 to L3. It's the Bayesian belief engine — Annex B of OLR-001 depends on it. Currently embedded in SVEND monolith with no golden references. Extract → calibrate → automate.
 
 ---
 
-## Calibration Schedule
+## Surface 2: Product Implementation of OLR-001
 
-| Instrument | Calibration Method | Frequency | Owner |
-|-----------|-------------------|-----------|-------|
-| forgecal golden cases | Self-referential — golden cases ARE the calibration | Verified every `forgegov run` | forgecal |
-| forgegov contract scanner | Test suite with synthetic violations (test_contracts.py) | Every commit | forgegov tests |
-| forgegov audit checks | Test suite with synthetic code (test_audits.py) | Every commit | forgegov tests |
-| SVEND bridge check | `run_compliance --check forge_ecosystem` | Daily (SVEND compliance schedule) | SVEND |
-| Quality manager judgment | Precedent log (Known Issues in QUALITY_AGENT.md) | After each review session | Quality manager |
+### The Three Concerns — Implementation Status
+
+#### Process Knowledge (GRAPH-001)
+
+The graph is the product. Everything else is an instrument that writes to it or reads from it.
+
+| Requirement | OLR-001 § | SVEND Implementation | Status | Verification |
+|-------------|----------|---------------------|--------|-------------|
+| Structured process relationships | §4.1 | `graph/models.py` — KnowledgeGraph, Entity, Relationship | Built | Check: graph stores directional cause→effect edges |
+| Evidence provenance on edges | §4.2 | Evidence model with source_type, p_value, effect_size, confidence | Built | Check: every EdgeEvidence traces to analysis/investigation |
+| Quantified confidence | §4.3 | Bayesian posteriors via forgesia/Synara | Built | Check: posteriors update from evidence, not just from assertion |
+| Knowledge gap visibility | §4.4 | Gap report from graph metrics | Partial | Check: uncalibrated edges identifiable, gap ratio computable |
+| Staleness detection | §4.5 | SPC shift detection, time-based thresholds | Partial | Check: stale edges flagged, staleness triggers fire on process change |
+| Growth from problems | §4.6 | Investigation writeback to graph | Built | Check: concluded investigation creates new nodes/edges |
+| Node classification tiers | §4.7 | Critical/major/minor from FMIS | Partial | Check: tier determines evidence minimum and staleness threshold |
+| Unified views (FMIS, control plan, process plan) | §5 | FMIS view, control plan derivation | Partial | Check: edit one view, others update |
+
+#### Learning System (LOOP-001)
+
+| Requirement | OLR-001 § | SVEND Implementation | Status | Verification |
+|-------------|----------|---------------------|--------|-------------|
+| Signal detection — unified capture | §7.1 | `loop/models.py` — Signal with source taxonomy | Built | Check: NCR, SPC alarm, audit finding, customer complaint all enter as Signal |
+| Investigation — structured methodology | §7.2 | Investigation engine (CANON-002), scoped subgraph | Built | Check: investigation scopes graph region, produces evidence |
+| Standardization — encode as artifacts | §7.3 | Document service, controlled documents linked to FMIS rows | Partial | Check: investigation conclusions become controlled documents |
+| Verification — process confirmation | §7.4.1 | Process confirmation model | Partial | Check: PC records update graph edges as evidence |
+| Verification — forced failure testing | §7.4.2 | FFT model with detection edge calibration | Planned | Check: FFT results update detection mechanism evidence |
+| Knowledge feedback — writeback | §7.5 | Investigation writeback to graph | Built | Check: new edges/nodes created from investigation |
+
+#### Compliance
+
+| Requirement | OLR-001 § | SVEND Implementation | Status | Verification |
+|-------------|----------|---------------------|--------|-------------|
+| ISO 9001 mapping | §23.1 | Auditor portal with clause-filtered views | Planned | Check: every ISO clause traceable to graph evidence |
+| IATF 16949 mapping | §23.2 | — | Not started | — |
+| AS9100D mapping | §23.3 | — | Not started | — |
+| CAPA as generated report | §7.2 note | forgedoc InvestigationReport builder | Built | Check: CAPA view assembles from investigation data |
+| Maturity level assessment | §14, §24 | CI Readiness Score (Harada instrument) | Built | Check: auditor can determine level from graph metrics |
+
+### Detection Mechanism Hierarchy (§9)
+
+OLR-001 defines an 8-level detection ladder. SVEND must implement the visualization and tracking.
+
+| Detection Level | What SVEND Shows | Implementation | Status |
+|----------------|-----------------|----------------|--------|
+| L1-2 (source prevention, auto arrest) | Poka-yoke status on equipment nodes | Graph edge type | Planned |
+| L3 (auto detect + segregate) | Vision system / automated inspection status | Graph edge with FFT evidence | Planned |
+| L4 (auto alert + human) | SPC alarms, andon signals | SPC → Signal routing | Built |
+| L5 (structured inspection) | Control plan items with schedule | Control plan view | Partial |
+| L6-8 (unstructured/downstream/undetectable) | Gaps to invest in | Gap report | Partial |
+| Distribution chart | % of critical chars at each level | forgeviz detection_ladder chart | Built |
+| Investment tracking | Movement up the ladder over time | Trend on detection distribution | Planned |
+
+### Knowledge Health Metrics (§13)
+
+These are the dashboard metrics that leadership sees. They replace management review.
+
+| Metric | OLR-001 § | Computation Source | SVEND Surface | Status |
+|--------|----------|-------------------|---------------|--------|
+| Calibration rate | §13.1 | Graph: calibrated edges / total edges | Dashboard + API | Partial |
+| Staleness rate | §13.2 | Graph: stale edges / calibrated edges | Dashboard + API | Partial |
+| Contradiction rate | §13.3 | Graph: edges with conflicting evidence / total | Dashboard + API | Planned |
+| Signal resolution velocity | §13.4 | Loop: time from Signal to knowledge update | Dashboard + API | Partial |
+| Knowledge gap ratio | §13.5 | Graph: assertion-only edges / total | Dashboard + API | Partial |
+| Proactive/reactive ratio | §13.6 | Signals: internal detection vs customer report | Dashboard + API | Planned |
+| Detection distribution | §13.7 | Detection ladder level counts on critical chars | forgeviz chart | Built |
+
+### Supplier Integration (§22)
+
+| Requirement | OLR-001 § | SVEND Implementation | Status |
+|-------------|----------|---------------------|--------|
+| Supplier evidence as knowledge input | §22.1 | CoA portal → graph edge evidence | Spec'd (object_271/supplier_accountability.md) |
+| Supplier claims as signal source | §22.2 | SupplierClaim → Signal routing | Spec'd |
+| Supplier response quality | §22.3 | Response portal with pattern analysis | Spec'd |
+| Incoming material → node evidence | §22.4 | CoA data → SPC → graph | Spec'd |
+
+### Pre-Production Knowledge Design (§6)
+
+| Step | OLR-001 § | SVEND Implementation | Status |
+|------|----------|---------------------|--------|
+| QFD → graph structure | §6.1 | QFD view derives specification nodes | Planned |
+| 3P → nodes and assertions | §6.2 | Process design → FMIS rows | Planned |
+| Moonshining → evidence | §6.3 | Investigation during pre-production | Planned (Loop works, UI pathway needed) |
+| Special process qualification | §6.4 | DOE → high-strength evidence | Built (forgedoe) |
+| Configuration boundaries | §6.5 | Product variants → affected nodes | Planned |
+| First article verification | §6.6 | Full-chain validation | Planned |
+| Control plan from graph | §6.7 | Control plan view derived from FMIS | Partial |
 
 ---
 
-## Staleness Triggers
+## Maturity Assessment — SVEND Product
 
-| Event | What Goes Stale | Action |
-|-------|----------------|--------|
-| New forge package extracted from SVEND | All: need calibration adapter, contract check, tests | Add `calibration.py`, verify contracts, add to registry |
-| Forge package API change (new/removed exports) | Calibration cases may reference old API | Re-run calibration, update golden cases |
-| forgecal schema change | All adapters | Verify all `get_calibration_adapter()` still work |
-| S1 adds new modules to a package | Lint, `__all__`, test coverage | Quality manager runs `forgegov run` + `forgegov audit` |
-| SVEND compliance check changes | Bridge check assumptions | Verify `check_forge_ecosystem()` still reads report correctly |
-| New banned import category added to contracts | All packages need re-scan | `forgegov run --stage contract` |
+**Current: between Level 1 and Level 2**
 
----
+| Criterion | Assessment |
+|-----------|-----------|
+| Graph stores structured process knowledge | Yes — GRAPH-001 implemented |
+| Evidence provenance on edges | Yes — Evidence model with source tracing |
+| Learning system operational | Yes — Loop handles signals → investigation → writeback |
+| Knowledge health computable | Partial — some metrics built, not all |
+| Unified views (FMIS = control plan = process plan) | Partial — FMIS exists, control plan derivation incomplete |
+| Detection hierarchy tracked | Partial — forgeviz chart built, tracking not wired |
+| Supplier integration | Spec'd, not built |
+| Pre-production knowledge design (3P/QFD) | Planned |
+| Maturity self-assessment | CI Readiness Score exists, not mapped to OLR-001 levels |
 
-## Maturity Assessment — Forge Ecosystem
+**To reach Level 2 (product can certify customers at Level 2):**
+- Complete knowledge health metrics dashboard
+- Wire detection hierarchy tracking
+- Control plan derivation from graph
+- Process confirmation as evidence source
 
-**Current level: 2 (Learning)**
-
-Evidence is accumulating. Calibration cases exist and pass. The learning system (forgegov) is actively discovering and fixing issues. Knowledge health is improving.
-
-| Criterion | Status |
-|-----------|--------|
-| Process knowledge structured | Yes — packages, exports, golden cases documented |
-| Evidence accumulating | Yes — 30 golden cases across 3 packages, passing |
-| Investigations producing knowledge | Yes — found gage.py crash, reorder.py math error, monte carlo incompleteness, box plot quantile error |
-| Knowledge health improving | Yes — 0 contract errors, lint clean, all tests pass |
-| Staleness managed | Partial — no automated staleness triggers yet |
-| Contradictions resolved | Yes — when findings arise, they're fixed same session |
-| Predictive capability | No — not yet predicting "this change will break X" |
-
-**To reach Level 3 (Sustaining):** Automated staleness triggers, sustained health over multiple sessions, forgecal drift detection in production use.
-
-**To reach Level 4 (Predictive):** Regression prediction from code changes (would require static analysis that understands computation semantics, not just structure).
+**To reach Level 3:**
+- Unified views (edit FMIS → control plan updates)
+- Supplier integration (claims as signals, CoA as evidence)
+- Forced failure testing model
+- Automated staleness triggers from process changes
 
 ---
 
-## Improvement Targets
+## Quality Manager Responsibilities
 
-### Near-term (move L6 → L5/L3)
+### Forge side (computation correctness)
+- `forgegov run` — pipeline must be green
+- `forgegov audit` — surface code quality issues
+- Review packages on "done" claims — challenge assertions
+- Catch cross-session conflicts
 
-1. **More golden reference cases** — every exported function in forgespc/forgedoe/forgesiop should have at least one golden case. Currently: 30 cases across 3 packages. Target: 100+.
-2. **Return shape validation** — audit that checks similar functions return consistent dict structures (new forgegov audit).
-3. **Import-time vs call-time safety** — audit that actually calls exported functions with minimal args to catch missing imports (the gage.py pattern).
+### SVEND side (product correctness)
+- Verify that forge computation reaches the graph correctly (integration layer)
+- Verify that the Loop works end-to-end (signal → investigation → writeback → graph update)
+- Verify that OLR-001 features work as specified (detection ladder, health metrics, unified views)
+- Track which OLR-001 sections are implemented vs planned vs not started
+- Flag when a forge package change breaks a product capability
 
-### Medium-term
-
-4. **Automated staleness triggers** — when a package's `__init__.py` changes (new exports), flag that calibration cases may be stale.
-5. **Drift detection in CI** — `forgecal.drift` runs on every `forgegov run`, compares against history.
-6. **Cross-package type checking** — ensure forge packages that depend on each other (forgespc → forgecal) have compatible interfaces.
-
-### Long-term
-
-7. **Forge ecosystem as OLR-001 reference implementation** — the control plan you're reading IS the process knowledge structure for the forge build process, applied using OLR-001 principles. If the standard works for governing software computation packages, it works for governing any process.
+### The bridge
+- `run_compliance --check forge_ecosystem` — confirms computation layer is healthy
+- When forge packages change API, verify SVEND integration layer still calls correctly
+- When SVEND adds OLR-001 features, verify they use forge packages (not reimplementing computation)
