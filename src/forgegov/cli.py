@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import registry, contracts, pipeline
+from . import registry, contracts, pipeline, audits
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -129,6 +129,34 @@ def cmd_compat(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Run standard quality audits."""
+    packages_filter = [args.package] if args.package else None
+    audit_names = [args.audit] if args.audit else None
+
+    scan_result = registry.scan(packages_filter)
+    if not scan_result.packages:
+        print("No packages found.")
+        return 1
+
+    result = audits.run_audits(scan_result.packages, audit_names)
+
+    if not result.findings:
+        print(f"No findings ({len(scan_result.packages)} packages audited)")
+        return 0
+
+    by_audit = result.by_audit()
+    for audit_name, findings in sorted(by_audit.items()):
+        print(f"\n{audit_name} ({len(findings)}):")
+        for f in findings:
+            severity = {"error": "ERROR", "warning": "WARN ", "info": "INFO "}.get(f.severity, "     ")
+            print(f"  [{severity}] {f}")
+
+    print(f"\n{len(result.errors)} errors, {len(result.warnings)} warnings, "
+          f"{len(result.findings) - len(result.errors) - len(result.warnings)} info")
+    return 1 if result.errors else 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     """Read the latest pipeline report (JSON to stdout)."""
     import json
@@ -180,6 +208,12 @@ def main(argv: list[str] | None = None) -> int:
     # forgegov compat
     sub.add_parser("compat", help="Show compatibility matrix")
 
+    # forgegov audit
+    p_audit = sub.add_parser("audit", help="Run standard quality audits")
+    p_audit.add_argument("--package", help="Target a specific package")
+    p_audit.add_argument("--audit", choices=list(audits.ALL_AUDITS.keys()),
+                         help="Run only this audit")
+
     # forgegov report
     p_report = sub.add_parser("report", help="Read latest pipeline report")
     p_report.add_argument("--json", action="store_true", help="Output raw JSON (for SVEND)")
@@ -194,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_status(args)
     elif args.command == "compat":
         return cmd_compat(args)
+    elif args.command == "audit":
+        return cmd_audit(args)
     elif args.command == "report":
         return cmd_report(args)
     else:
