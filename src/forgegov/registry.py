@@ -18,7 +18,7 @@ KNOWN_PACKAGES = [
     "forgeml",
     "forgepbs",
     "forgespc",
-    "forgestats",
+    "forgestat",
     "forgebay",
     "forgesia",
     "forgesiop",
