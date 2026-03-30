@@ -262,9 +262,10 @@ def _stage_calibrate(scan_result: ScanResult) -> StageResult:
         if not report.is_calibrated:
             for case_result in report.results:
                 if not case_result.passed:
+                    failed_checks = [c for c in case_result.checks if not c.passed]
                     errors.append(
-                        f"{case_result.case.package}/{case_result.case.case_id}: "
-                        f"{len(case_result.failures)} failures"
+                        f"{case_result.package}/{case_result.case_id}: "
+                        f"{len(failed_checks)} failures"
                     )
 
         return StageResult(
