@@ -18,6 +18,7 @@ KNOWN_PACKAGES = [
     "forgeml",
     "forgepad",
     "forgepbs",
+    "forgequeue",
     "forgespc",
     "forgestat",
     "forgebay",
