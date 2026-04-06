@@ -193,7 +193,7 @@ def _stage_test(packages: list[PackageInfo]) -> StageResult:
             continue
 
         rc, output = _run_subprocess(
-            [sys.executable, "-m", "pytest", "-q", "--tb=no", "--no-header"],
+            [sys.executable, "-m", "pytest", "-p", "no:django", "-q", "--tb=no", "--no-header"],
             cwd=root,
             timeout=120,
         )
